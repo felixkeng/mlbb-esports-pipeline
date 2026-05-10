@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLBB Draft Recommender</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500&display=swap');
+  :root {
+    --bg:      #0a0c10;
+    --surface: #12151c;
+    --card:    #181c26;
+    --border:  #252a38;
+    --accent:  #4f8ef7;
+    --accent2: #a78bfa;
+    --success: #34d399;
+    --danger:  #f87171;
+    --warning: #fbbf24;
+    --text:    #e8eaf0;
+    --muted:   #5a6070;
+    --sub:     #8b92a8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 720px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 2.5rem; }
+  header h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 2.4rem; font-weight: 700; letter-spacing: 0.04em;
+    background: linear-gradient(120deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 0.4rem;
+  }
+  header p { font-size: 13px; color: var(--sub); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.25rem; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .enemy-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; min-height: 32px; }
+  .enemy-tag {
+    display: flex; align-items: center; gap: 6px;
+    background: #1e2435; border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px 12px; font-size: 13px; color: var(--text);
+    animation: fadeIn 0.15s ease;
+  }
+  .enemy-tag .x { cursor: pointer; color: var(--muted); font-size: 12px; background: none; border: none; padding: 0; line-height: 1; transition: color 0.1s; }
+  .enemy-tag .x:hover { color: var(--danger); }
+
+  .input-wrap { position: relative; flex: 1; }
+  .add-row { display: flex; gap: 8px; }
+  .add-row input {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px; font-size: 13px; color: var(--text);
+    outline: none; font-family: inherit; transition: border-color 0.15s;
+  }
+  .add-row input:focus { border-color: var(--accent); }
+  .add-row input::placeholder { color: var(--muted); }
+
+  .dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; z-index: 100;
+    max-height: 220px; overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .dropdown-item {
+    padding: 9px 14px; font-size: 13px; cursor: pointer;
+    color: var(--text); transition: background 0.1s;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dropdown-item:hover { background: #1e2435; }
+  .dropdown-item.taken { color: var(--muted); cursor: not-allowed; }
+  .dropdown-item.taken:hover { background: transparent; }
+  .taken-label { font-size: 11px; color: var(--danger); }
+
+  .counter { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .counter span { color: var(--accent); }
+
+  .roles { display: flex; flex-wrap: wrap; gap: 8px; }
+  .role-btn {
+    padding: 7px 18px; border-radius: 999px; border: 1px solid var(--border);
+    background: transparent; color: var(--sub); font-size: 13px;
+    font-family: inherit; cursor: pointer; transition: all 0.15s;
+  }
+  .role-btn:hover { border-color: var(--accent); color: var(--text); }
+  .role-btn.active { background: #1a2845; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+
+  .go-btn {
+    width: 100%; padding: 12px;
+    background: linear-gradient(135deg, #1a3a6e, #2a1a5e);
+    border: 1px solid #2a4080; border-radius: 10px; color: var(--text);
+    font-size: 14px; font-weight: 500; font-family: 'Rajdhani', sans-serif;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+    transition: opacity 0.15s; margin-bottom: 1.5rem;
+  }
+  .go-btn:hover:not(:disabled) { opacity: 0.85; }
+  .go-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .results-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .hero-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; animation: fadeIn 0.2s ease; }
+  .hero-card.top { border-color: #2a4080; background: #12192e; }
+  .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .hero-name { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 600; letter-spacing: 0.03em; }
+  .top .hero-name { color: var(--accent); }
+  .score-pill { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--sub); }
+  .top .score-pill { background: #1a2845; border-color: #2a4080; color: var(--accent); }
+  .meta-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .pill { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--sub); }
+  .pill.s { border-color: #15803d; color: var(--success); }
+  .pill.a { border-color: #1d4ed8; color: #60a5fa; }
+  .pill.b { border-color: #92400e; color: var(--warning); }
+  .stats { display: flex; gap: 18px; font-size: 12px; color: var(--sub); flex-wrap: wrap; margin-bottom: 8px; }
+  .stats b { color: var(--text); font-weight: 500; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag-good { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: #0d2a1a; border: 1px solid #15803d; color: var(--success); }
+  .tag-bad  { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: #2a0d0d; border: 1px solid #7f1d1d; color: var(--danger); }
+  .empty-msg { font-size: 13px; color: var(--muted); padding: 0.25rem 0; }
+  .error-msg { background: #2a0d0d; border: 1px solid #7f1d1d; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: var(--danger); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>MLBB Draft Recommender</h1>
+    <p>Enter the enemy team and your role to get the best counter picks</p>
+  </header>
+
+  <div class="card">
+    <p class="section-label">
+      Enemy heroes
+      <span id="count-label" style="color:var(--accent);margin-left:6px;font-size:10px;"></span>
+    </p>
+    <div class="enemy-tags" id="enemy-tags">
+      <span class="empty-msg">No enemies added yet</span>
+    </div>
+    <div class="add-row">
+      <div class="input-wrap">
+        <input
+          type="text" id="enemy-input"
+          placeholder="Search hero name..." maxlength="40"
+          autocomplete="off"
+          oninput="onType()"
+          onkeydown="onKey(event)"
+        />
+        <div class="dropdown" id="dropdown" style="display:none;"></div>
+      </div>
+    </div>
+    <p class="counter"><span id="remaining">5</span> slots remaining — <span style="color:var(--danger);font-size:11px;">banned/picked heroes cannot be selected again</span></p>
+  </div>
+
+  <div class="card">
+    <p class="section-label">Your role</p>
+    <div class="roles" id="roles"></div>
+  </div>
+
+  <button class="go-btn" id="go-btn" onclick="recommend()" disabled>
+    Get recommendations
+  </button>
+
+  <div id="results-area" style="display:none;">
+    <p class="results-label" id="results-label"></p>
+    <div id="results-list"></div>
+  </div>
+
+</div>
+<script>
+const ROLES = ["Tank","Fighter","Mage","Marksman","Assassin","Support"];
+const API   = "http://127.0.0.1:8000";
+
+let allHeroes    = [];
+let enemies      = [];
+let selectedRole = null;
+let highlighted  = -1;
+
+async function loadHeroes() {
+  try {
+    const res  = await fetch(`${API}/heroes/names`);
+    const data = await res.json();
+    allHeroes  = data.heroes;
+  } catch(e) {
+    console.warn("Could not load hero list:", e);
+  }
+}
+
+ROLES.forEach(r => {
+  const b = document.createElement("button");
+  b.className   = "role-btn";
+  b.textContent = r;
+  b.onclick = () => {
+    document.querySelectorAll(".role-btn").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    selectedRole = r;
+    checkReady();
+  };
+  document.getElementById("roles").appendChild(b);
+});
+
+function onType() {
+  highlighted = -1;
+  showDropdown();
+}
+
+function onKey(e) {
+  const items = document.querySelectorAll(".dropdown-item:not(.taken)");
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    highlighted = Math.min(highlighted + 1, items.length - 1);
+    updateHighlight(items);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    highlighted = Math.max(highlighted - 1, 0);
+    updateHighlight(items);
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (highlighted >= 0 && items[highlighted]) {
+      pickHero(items[highlighted].dataset.name);
+    } else {
+      addFromInput();
+    }
+  } else if (e.key === "Escape") {
+    hideDropdown();
+  }
+}
+
+function updateHighlight(items) {
+  items.forEach((item, i) => {
+    item.style.background = i === highlighted ? "#1e2435" : "";
+  });
+}
+
+function showDropdown() {
+  const query = document.getElementById("enemy-input").value.trim().toLowerCase();
+  const dd    = document.getElementById("dropdown");
+
+  if (!query || enemies.length >= 5) { hideDropdown(); return; }
+
+  const filtered = allHeroes.filter(h => h.toLowerCase().includes(query)).slice(0, 10);
+
+  if (filtered.length === 0) { hideDropdown(); return; }
+
+  dd.innerHTML = "";
+  filtered.forEach(name => {
+    const taken = enemies.map(e => e.toLowerCase()).includes(name.toLowerCase());
+    const item  = document.createElement("div");
+    item.className      = `dropdown-item${taken ? " taken" : ""}`;
+    item.dataset.name   = name;
+    item.innerHTML      = `<span>${highlight(name, query)}</span>${taken ? '<span class="taken-label">already picked</span>' : ""}`;
+    if (!taken) item.onclick = () => pickHero(name);
+    dd.appendChild(item);
+  });
+
+  dd.style.display = "block";
+}
+
+function highlight(name, query) {
+  const idx = name.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return name;
+  return name.slice(0, idx) +
+    `<span style="color:var(--accent);font-weight:500;">${name.slice(idx, idx + query.length)}</span>` +
+    name.slice(idx + query.length);
+}
+
+function hideDropdown() {
+  document.getElementById("dropdown").style.display = "none";
+  highlighted = -1;
+}
+
+function pickHero(name) {
+  if (enemies.length >= 5) return;
+  if (enemies.map(e => e.toLowerCase()).includes(name.toLowerCase())) return;
+  enemies.push(name);
+  document.getElementById("enemy-input").value = "";
+  hideDropdown();
+  renderTags();
+  checkReady();
+}
+
+function addFromInput() {
+  const val  = document.getElementById("enemy-input").value.trim();
+  const match = allHeroes.find(h => h.toLowerCase() === val.toLowerCase());
+  if (match) pickHero(match);
+}
+
+function removeEnemy(name) {
+  enemies = enemies.filter(e => e !== name);
+  renderTags();
+  checkReady();
+}
+
+function renderTags() {
+  const container = document.getElementById("enemy-tags");
+  container.innerHTML = "";
+
+  if (enemies.length === 0) {
+    container.innerHTML = `<span class="empty-msg">No enemies added yet</span>`;
+  } else {
+    enemies.forEach(name => {
+      const tag = document.createElement("div");
+      tag.className = "enemy-tag";
+      tag.innerHTML = `<span>${name}</span><button class="x" onclick="removeEnemy('${name}')">✕</button>`;
+      container.appendChild(tag);
+    });
+  }
+
+  const remaining = 5 - enemies.length;
+  document.getElementById("remaining").textContent = remaining;
+  document.getElementById("count-label").textContent = enemies.length > 0 ? `${enemies.length}/5` : "";
+}
+
+function checkReady() {
+  document.getElementById("go-btn").disabled = !selectedRole;
+}
+
+document.addEventListener("click", e => {
+  if (!e.target.closest(".input-wrap")) hideDropdown();
+});
+
+async function recommend() {
+  if (!selectedRole) return;
+  const btn = document.getElementById("go-btn");
+  btn.textContent = "Calculating...";
+  btn.disabled = true;
+
+  let url = `${API}/recommend?role=${encodeURIComponent(selectedRole)}`;
+  enemies.forEach((e, i) => { url += `&enemy${i+1}=${encodeURIComponent(e)}`; });
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "API error");
+    showResults(data);
+  } catch(err) {
+    document.getElementById("results-area").style.display = "block";
+    document.getElementById("results-label").textContent  = "Error";
+    document.getElementById("results-list").innerHTML =
+      `<div class="error-msg">Could not reach your API. Make sure <code>python3 run.py</code> is running.<br><br>${err.message}</div>`;
+  }
+
+  btn.textContent = "Get recommendations";
+  btn.disabled    = false;
+  checkReady();
+}
+
+function tierClass(t) {
+  if (!t) return "";
+  const u = t.trim().toUpperCase();
+  return u === "S" ? "s" : u === "A" ? "a" : u === "B" ? "b" : "";
+}
+
+function showResults(data) {
+  const area  = document.getElementById("results-area");
+  const list  = document.getElementById("results-list");
+  const label = document.getElementById("results-label");
+  area.style.display = "block";
+
+  label.textContent = data.enemy_team.length > 0
+    ? `Best ${data.your_role} picks vs ${data.enemy_team.join(", ")}`
+    : `Best ${data.your_role} picks (no enemies specified)`;
+
+  list.innerHTML = "";
+  data.recommended.forEach((h, i) => {
+    const card        = document.createElement("div");
+    card.className    = `hero-card${i === 0 ? " top" : ""}`;
+    const counterTags = h.counters.map(c => `<span class="tag-good">counters ${c}</span>`).join("");
+    const weakTags    = h.weak_to.map(w  => `<span class="tag-bad">weak to ${w}</span>`).join("");
+    const hasTags     = h.counters.length > 0 || h.weak_to.length > 0;
+
+    card.innerHTML = `
+      <div class="card-top">
+        <span class="hero-name">${i+1}. ${h.hero_name}</span>
+        <span class="score-pill">score ${h.total_score.toFixed(1)}</span>
+      </div>
+      <div class="meta-row">
+        <span class="pill">${h.role}</span>
+        <span class="pill ${tierClass(h.tier)}">${h.tier}-tier</span>
+      </div>
+      <div class="stats">
+        <span>Win rate <b>${h.win_rate.toFixed(1)}%</b></span>
+        <span>Ban rate <b>${h.ban_rate.toFixed(1)}%</b></span>
+        <span>Counter bonus <b>+${h.counter_score}</b></span>
+        <span>Tier bonus <b>+${h.tier_bonus}</b></span>
+      </div>
+      ${hasTags ? `<div class="tags">${counterTags}${weakTags}</div>` : ""}
+    `;
+    list.appendChild(card);
+  });
+}
+
+loadHeroes();
+</script>
+</body>
+</html>
